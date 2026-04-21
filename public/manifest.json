@@ -1,0 +1,10 @@
+{
+  "name": "PaceAI",
+  "short_name": "PaceAI",
+  "description": "AI running coach for the Indian market",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3b6d11",
+  "icons": []
+}

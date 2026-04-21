@@ -1,0 +1,216 @@
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { supabase } from '../lib/supabase'
+import { streamChat, extractProfile } from '../lib/claude'
+import { generateAndSavePlan } from '../lib/generatePlan'
+
+const INITIAL_MESSAGE = {
+  role: 'assistant',
+  content:
+    "Hi! I'm Coach Pace, your personal AI running coach 🏃 I'm here to build a training plan that's just right for you. Let's start — what's your name?",
+}
+
+export default function Onboarding() {
+  const [user, setUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [email, setEmail] = useState('')
+  const [emailSent, setEmailSent] = useState(false)
+
+  const [messages, setMessages] = useState([INITIAL_MESSAGE])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const [profileDraft, setProfileDraft] = useState({})
+  const [saving, setSaving] = useState(false)
+
+  const bottomRef = useRef(null)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user)
+      setAuthLoading(false)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
+
+  const sendMagicLink = async (e) => {
+    e.preventDefault()
+    await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/onboarding` },
+    })
+    setEmailSent(true)
+  }
+
+  const sendMessage = async () => {
+    if (!input.trim() || loading) return
+
+    const userMessage = { role: 'user', content: input.trim() }
+    const nextMessages = [...messages, userMessage]
+    setMessages(nextMessages)
+    setInput('')
+    setLoading(true)
+
+    setMessages((prev) => [...prev, { role: 'assistant', content: '' }])
+
+    let fullText = ''
+    try {
+      await streamChat(nextMessages, (chunk) => {
+        fullText += chunk
+        setMessages((prev) => {
+          const updated = [...prev]
+          updated[updated.length - 1] = { role: 'assistant', content: fullText }
+          return updated
+        })
+      })
+    } finally {
+      setLoading(false)
+    }
+
+    const userTurns = nextMessages.filter((m) => m.role === 'user').length
+    if (userTurns < 3) return
+
+    const withAssistant = [...nextMessages, { role: 'assistant', content: fullText }]
+    extractProfile(withAssistant)
+      .then((extracted) => {
+        if (extracted && typeof extracted === 'object') {
+          setProfileDraft((prev) => {
+            const merged = { ...prev }
+            for (const [k, v] of Object.entries(extracted)) {
+              if (v !== null && v !== undefined) merged[k] = v
+            }
+            return merged
+          })
+        }
+      })
+      .catch(() => {})
+  }
+
+  const userMessageCount = messages.filter((m) => m.role === 'user').length
+
+  const effectiveProfile = {
+    ...profileDraft,
+    fitness_level: profileDraft.fitness_level ?? (userMessageCount >= 8 ? 'beginner' : null),
+  }
+
+  const saveProfile = async () => {
+    if (!user) return
+    setSaving(true)
+    try {
+      const { error: profileError } = await supabase.from('users').upsert({
+        id: user.id,
+        ...effectiveProfile,
+        updated_at: new Date().toISOString(),
+      })
+      if (profileError) throw profileError
+      await generateAndSavePlan(effectiveProfile, user.id)
+      navigate('/home')
+    } catch {
+      setSaving(false)
+    }
+  }
+
+  const profileReady =
+    userMessageCount >= 6 &&
+    effectiveProfile.name &&
+    effectiveProfile.fitness_level &&
+    effectiveProfile.goal &&
+    (effectiveProfile.city || effectiveProfile.sport_affinity || effectiveProfile.health_notes || effectiveProfile.days_per_week)
+
+  if (authLoading) return null
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white px-6">
+        <h1 className="text-2xl font-semibold text-gray-900 mb-2">Meet Coach Pace</h1>
+        <p className="text-sm text-gray-400 mb-8 text-center">
+          We'll save your profile after we get to know you
+        </p>
+        {emailSent ? (
+          <p className="text-sm text-[#3b6d11] text-center">
+            Check your inbox — we sent a magic link to <strong>{email}</strong>
+          </p>
+        ) : (
+          <form onSubmit={sendMagicLink} className="w-full max-w-sm flex flex-col gap-3">
+            <input
+              type="email"
+              placeholder="your@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#3b6d11] transition-colors"
+            />
+            <button
+              type="submit"
+              className="bg-[#3b6d11] text-white rounded-xl py-3 text-sm font-medium"
+            >
+              Continue with email
+            </button>
+          </form>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col bg-white">
+      <div className="flex-1 overflow-y-auto px-4 pt-6 pb-36 flex flex-col gap-3">
+        {messages.map((msg, i) => (
+          <div
+            key={i}
+            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+          >
+            <div
+              className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                msg.role === 'user'
+                  ? 'bg-[#3b6d11] text-white rounded-br-sm'
+                  : 'bg-gray-100 text-gray-800 rounded-bl-sm'
+              }`}
+            >
+              {msg.content || <span className="opacity-30">● ● ●</span>}
+            </div>
+          </div>
+        ))}
+        <div ref={bottomRef} />
+      </div>
+
+      {profileReady && (
+        <div className="fixed bottom-[72px] left-0 right-0 flex justify-center px-4 pb-2">
+          <button
+            onClick={saveProfile}
+            disabled={saving}
+            className="bg-[#3b6d11] text-white text-sm font-medium px-6 py-3 rounded-xl shadow-lg disabled:opacity-60"
+          >
+            {saving ? 'Saving…' : 'Save your plan →'}
+          </button>
+        </div>
+      )}
+
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-3 flex gap-2">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+          placeholder="Message Coach Pace…"
+          disabled={loading}
+          className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#3b6d11] transition-colors disabled:opacity-50"
+        />
+        <button
+          onClick={sendMessage}
+          disabled={loading || !input.trim()}
+          className="bg-[#3b6d11] text-white rounded-xl px-4 py-2.5 text-sm font-medium disabled:opacity-40 transition-opacity"
+        >
+          Send
+        </button>
+      </div>
+    </div>
+  )
+}
