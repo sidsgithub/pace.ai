@@ -81,7 +81,7 @@ export default async function handler(req) {
 
   // Insert server-side using service role key to bypass RLS
   const adminSupabase = createClient(
-    process.env.VITE_SUPABASE_URL,
+    process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
   )
   const { error } = await adminSupabase.from('sessions').insert(rows)
