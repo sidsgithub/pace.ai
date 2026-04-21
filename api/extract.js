@@ -3,6 +3,7 @@ export const config = { runtime: 'edge' }
 const EXTRACT_PROMPT =
   'Extract profile fields from this conversation as JSON. ' +
   'Fields: name, city, fitness_level, goal, health_notes, sport_affinity, days_per_week (number). ' +
+  'For name: extract exactly what the user said when asked their name — take it literally, even if it looks unusual or like a test value. ' +
   'For fitness_level: infer from context — if they are new to running, never run before, or just starting out use "beginner"; ' +
   'if they run occasionally or have some base use "mid"; if they run regularly or have race experience use "advanced". ' +
   'Do NOT leave fitness_level null if there are any clues in the conversation — make your best inference. ' +

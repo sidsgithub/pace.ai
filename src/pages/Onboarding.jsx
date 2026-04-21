@@ -22,6 +22,7 @@ export default function Onboarding() {
 
   const [profileDraft, setProfileDraft] = useState({})
   const [saving, setSaving] = useState(false)
+  const [closingSent, setClosingSent] = useState(false)
 
   const bottomRef = useRef(null)
   const navigate = useNavigate()
@@ -112,6 +113,27 @@ export default function Onboarding() {
     fitness_level: profileDraft.fitness_level ?? (userMessageCount >= 8 ? 'beginner' : null),
   }
 
+  const profileReady =
+    userMessageCount >= 6 &&
+    profileDraft.name &&
+    profileDraft.fitness_level &&
+    profileDraft.goal &&
+    profileDraft.days_per_week &&
+    (profileDraft.city || profileDraft.sport_affinity || profileDraft.health_notes)
+
+  useEffect(() => {
+    if (profileReady && !closingSent) {
+      setClosingSent(true)
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: "I have everything I need to build your plan. Tap 'Save your plan' when you're ready and I'll set it up for you.",
+        },
+      ])
+    }
+  }, [profileReady, closingSent])
+
   const saveProfile = async () => {
     if (!user) return
     setSaving(true)
@@ -123,19 +145,12 @@ export default function Onboarding() {
         updated_at: new Date().toISOString(),
       })
       if (profileError) throw profileError
-      await generateAndSavePlan(effectiveProfile, user.id)
       navigate('/home')
+      generateAndSavePlan(effectiveProfile, user.id)
     } catch {
       setSaving(false)
     }
   }
-
-  const profileReady =
-    userMessageCount >= 6 &&
-    effectiveProfile.name &&
-    effectiveProfile.fitness_level &&
-    effectiveProfile.goal &&
-    (effectiveProfile.city || effectiveProfile.sport_affinity || effectiveProfile.health_notes || effectiveProfile.days_per_week)
 
   if (authLoading) return null
 
@@ -212,12 +227,12 @@ export default function Onboarding() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
           placeholder="Message Coach Pace…"
-          disabled={loading}
+          disabled={loading || closingSent}
           className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#3b6d11] transition-colors disabled:opacity-50"
         />
         <button
           onClick={sendMessage}
-          disabled={loading || !input.trim()}
+          disabled={loading || closingSent || !input.trim()}
           className="bg-[#3b6d11] text-white rounded-xl px-4 py-2.5 text-sm font-medium disabled:opacity-40 transition-opacity"
         >
           Send

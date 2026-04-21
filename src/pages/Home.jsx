@@ -11,6 +11,15 @@ const TYPE_ABBR = {
   intervals: 'I',
 }
 
+const TYPE_LABEL = {
+  easy: 'Easy',
+  tempo: 'Tempo',
+  long: 'Long run',
+  rest: 'Rest',
+  strength: 'Strength',
+  intervals: 'Intervals',
+}
+
 function getGreeting() {
   const h = new Date().getHours()
   if (h < 12) return 'Good morning'
@@ -33,7 +42,9 @@ export default function Home() {
   const [profile, setProfile] = useState(null)
   const [weekSessions, setWeekSessions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [planPending, setPlanPending] = useState(false)
   const [marking, setMarking] = useState(false)
+  const [selectedIdx, setSelectedIdx] = useState(null)
   const navigate = useNavigate()
 
   const todayStr = useMemo(() => toLocalDateStr(new Date()), [])
@@ -59,12 +70,44 @@ export default function Home() {
       ])
 
       if (profileData) setProfile(profileData)
-      setWeekSessions(sessions ?? [])
+      const s = sessions ?? []
+      setWeekSessions(s)
+      if (s.length === 0) {
+        setPlanPending(true)
+      } else {
+        const todayIdx = s.findIndex((x) => x.session_date === toLocalDateStr(todayDate))
+        setSelectedIdx(todayIdx >= 0 ? todayIdx : 0)
+      }
       setLoading(false)
     }
 
     fetchData()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!planPending) return
+    const interval = setInterval(async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const todayDate = new Date()
+      const endDate = new Date(todayDate)
+      endDate.setDate(todayDate.getDate() + 7)
+      const { data } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('session_date', toLocalDateStr(todayDate))
+        .lte('session_date', toLocalDateStr(endDate))
+        .order('session_date', { ascending: true })
+      if (data && data.length > 0) {
+        setWeekSessions(data)
+        setPlanPending(false)
+        const todayIdx = data.findIndex((x) => x.session_date === toLocalDateStr(new Date()))
+        setSelectedIdx(todayIdx >= 0 ? todayIdx : 0)
+      }
+    }, 5000)
+    return () => clearInterval(interval)
+  }, [planPending])
 
   const todaySession = weekSessions.find((s) => s.session_date === todayStr) ?? null
 
@@ -105,6 +148,7 @@ export default function Home() {
       {/* Today's session hero card */}
       <TodayCard
         loading={loading}
+        planPending={planPending}
         weekSessions={weekSessions}
         todaySession={todaySession}
         marking={marking}
@@ -115,21 +159,25 @@ export default function Home() {
 
       {/* Plan strip */}
       {!loading && weekSessions.length > 0 && (
-        <div>
-          <p className="text-xs text-gray-400 uppercase tracking-wider mb-3">Your plan</p>
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-gray-400 uppercase tracking-wider">Your plan</p>
           <div className="flex gap-1.5">
             {weekSessions.map((session, i) => {
               const isToday = session.session_date === todayStr
               const isDone = session.status === 'done'
+              const isSelected = selectedIdx === i
               const dayLabel = new Date(session.session_date + 'T00:00:00')
                 .toLocaleDateString('en-IN', { weekday: 'short' })
 
               return (
-                <div
+                <button
                   key={i}
-                  className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-xl text-xs font-medium ${
-                    isToday
+                  onClick={() => setSelectedIdx(isSelected ? null : i)}
+                  className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-xl text-xs font-medium transition-colors ${
+                    isSelected
                       ? 'bg-[#3b6d11] text-white'
+                      : isToday
+                      ? 'bg-[#3b6d11]/20 text-[#3b6d11]'
                       : isDone
                       ? 'bg-[#3b6d11]/10 text-[#3b6d11]'
                       : 'bg-gray-50 text-gray-400'
@@ -139,26 +187,60 @@ export default function Home() {
                   <span className="opacity-75">
                     {isDone ? '✓' : typeAbbr(session.session_type)}
                   </span>
-                </div>
+                </button>
               )
             })}
           </div>
+
+          {/* Expanded session detail */}
+          {selectedIdx !== null && weekSessions[selectedIdx] && (
+            <SessionDetail session={weekSessions[selectedIdx]} />
+          )}
         </div>
       )}
     </div>
   )
 }
 
-function TodayCard({ loading, weekSessions, todaySession, marking, onMarkDone, onMarkRestDone, onStartRun }) {
+function SessionDetail({ session }) {
+  const label = TYPE_LABEL[session.session_type?.toLowerCase()] ?? session.session_type
+  const meta = [
+    session.distance_km != null && `${session.distance_km} km`,
+    session.duration_min != null && `${session.duration_min} min`,
+  ].filter(Boolean).join(' · ')
+
+  return (
+    <div className="rounded-2xl bg-gray-50 p-4 flex flex-col gap-2.5">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-medium bg-white border border-gray-200 text-gray-500 rounded-full px-2.5 py-0.5">
+          {label}
+        </span>
+        {meta && <span className="text-xs text-gray-400">{meta}</span>}
+      </div>
+      {session.title && (
+        <p className="font-semibold text-gray-900 text-sm">{session.title}</p>
+      )}
+      {session.description && (
+        <p className="text-sm text-gray-600 leading-relaxed">{session.description}</p>
+      )}
+      {session.coach_message && (
+        <p className="text-xs text-[#3b6d11] italic leading-relaxed">{session.coach_message}</p>
+      )}
+    </div>
+  )
+}
+
+function TodayCard({ loading, planPending, weekSessions, todaySession, marking, onMarkDone, onMarkRestDone, onStartRun }) {
   if (loading) {
     return <div className="rounded-2xl bg-gray-50 h-36 animate-pulse" />
   }
 
   if (weekSessions.length === 0) {
     return (
-      <div className="rounded-2xl border border-gray-200 p-5 text-center">
+      <div className="rounded-2xl bg-gray-50 p-5 flex items-center gap-4 animate-pulse">
+        <div className="w-2 h-2 rounded-full bg-[#3b6d11]/40 shrink-0" />
         <p className="text-sm text-gray-400">
-          Your plan is being built — check back in a moment
+          {planPending ? 'Building your plan…' : 'Your plan is being built — check back in a moment'}
         </p>
       </div>
     )
