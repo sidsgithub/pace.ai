@@ -100,6 +100,27 @@ export function apiPlugin() {
         if (req.method !== 'POST') return next()
         try {
           const { profile, userId } = await readBody(req)
+          const adminSupabase = createClient(
+            process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY,
+          )
+
+          // Skip generation if a future planned session already exists
+          const today = new Date().toISOString().split('T')[0]
+          const { data: existing } = await adminSupabase
+            .from('sessions')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('status', 'planned')
+            .gte('session_date', today)
+            .limit(1)
+
+          if (existing && existing.length > 0) {
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ success: true, skipped: true, reason: 'plan already exists' }))
+            return
+          }
+
           const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
           const response = await client.messages.create({
@@ -117,11 +138,14 @@ export function apiPlugin() {
             return
           }
 
+          await adminSupabase
+            .from('sessions')
+            .delete()
+            .eq('user_id', userId)
+            .eq('status', 'planned')
+            .gte('session_date', today)
+
           const rows = sessions.map((s) => ({ ...s, user_id: userId, status: 'planned' }))
-          const adminSupabase = createClient(
-            process.env.VITE_SUPABASE_URL,
-            process.env.SUPABASE_SERVICE_ROLE_KEY,
-          )
           const { error } = await adminSupabase.from('sessions').insert(rows)
           if (error) throw error
 

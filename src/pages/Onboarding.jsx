@@ -27,14 +27,26 @@ export default function Onboarding() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    // onAuthStateChange fires immediately with the current session (or after
-    // processing the magic link hash), so we use it as the single source of truth.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const currentUser = session?.user ?? null
+      setUser(currentUser)
+
+      if (currentUser) {
+        const { data } = await supabase
+          .from('users')
+          .select('onboarded')
+          .eq('id', currentUser.id)
+          .single()
+        if (data?.onboarded) {
+          navigate('/home')
+          return
+        }
+      }
+
       setAuthLoading(false)
     })
     return () => subscription.unsubscribe()
-  }, [])
+  }, [navigate])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -107,6 +119,7 @@ export default function Onboarding() {
       const { error: profileError } = await supabase.from('users').upsert({
         id: user.id,
         ...effectiveProfile,
+        onboarded: true,
         updated_at: new Date().toISOString(),
       })
       if (profileError) throw profileError

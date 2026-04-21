@@ -48,6 +48,28 @@ export default async function handler(req) {
 
   const { profile, userId } = await req.json()
 
+  const adminSupabase = createClient(
+    process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+  )
+
+  // Skip generation if a future planned session already exists
+  const today = new Date().toISOString().split('T')[0]
+  const { data: existing } = await adminSupabase
+    .from('sessions')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('status', 'planned')
+    .gte('session_date', today)
+    .limit(1)
+
+  if (existing && existing.length > 0) {
+    return new Response(
+      JSON.stringify({ success: true, skipped: true, reason: 'plan already exists' }),
+      { headers: { 'Content-Type': 'application/json' } },
+    )
+  }
+
   const upstream = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -77,13 +99,15 @@ export default async function handler(req) {
     })
   }
 
+  await adminSupabase
+    .from('sessions')
+    .delete()
+    .eq('user_id', userId)
+    .eq('status', 'planned')
+    .gte('session_date', today)
+
   const rows = sessions.map((s) => ({ ...s, user_id: userId, status: 'planned' }))
 
-  // Insert server-side using service role key to bypass RLS
-  const adminSupabase = createClient(
-    process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-  )
   const { error } = await adminSupabase.from('sessions').insert(rows)
   if (error) {
     return new Response(JSON.stringify({ error: error.message }), {

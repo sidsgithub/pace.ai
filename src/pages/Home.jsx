@@ -75,6 +75,16 @@ export default function Home() {
     navigate(`/checkin/${todaySession.id}`)
   }
 
+  const markRestDone = async () => {
+    if (!todaySession || marking) return
+    setMarking(true)
+    await supabase.from('sessions').update({ status: 'done' }).eq('id', todaySession.id)
+    setWeekSessions((prev) =>
+      prev.map((s) => (s.id === todaySession.id ? { ...s, status: 'done' } : s))
+    )
+    setMarking(false)
+  }
+
   const formattedDate = new Date().toLocaleDateString('en-IN', {
     weekday: 'long',
     month: 'long',
@@ -99,6 +109,7 @@ export default function Home() {
         todaySession={todaySession}
         marking={marking}
         onMarkDone={markDone}
+        onMarkRestDone={markRestDone}
         onStartRun={() => navigate(`/run/${todaySession?.id}`)}
       />
 
@@ -138,7 +149,7 @@ export default function Home() {
   )
 }
 
-function TodayCard({ loading, weekSessions, todaySession, marking, onMarkDone, onStartRun }) {
+function TodayCard({ loading, weekSessions, todaySession, marking, onMarkDone, onMarkRestDone, onStartRun }) {
   if (loading) {
     return <div className="rounded-2xl bg-gray-50 h-36 animate-pulse" />
   }
@@ -158,6 +169,23 @@ function TodayCard({ loading, weekSessions, todaySession, marking, onMarkDone, o
       <div className="rounded-2xl bg-gray-50 p-5">
         <p className="font-medium text-gray-700">Rest day</p>
         <p className="text-sm text-gray-400 mt-1">Recovery is part of the plan.</p>
+      </div>
+    )
+  }
+
+  if (todaySession.session_type === 'rest' && todaySession.status !== 'done') {
+    return (
+      <div className="rounded-2xl bg-gray-50 p-5 flex flex-col gap-3">
+        {todaySession.coach_message && (
+          <p className="text-sm text-gray-600 leading-relaxed">{todaySession.coach_message}</p>
+        )}
+        <button
+          onClick={onMarkRestDone}
+          disabled={marking}
+          className="self-start text-xs text-gray-400 underline underline-offset-2 disabled:opacity-40"
+        >
+          {marking ? 'Saving…' : 'Mark as rest day taken'}
+        </button>
       </div>
     )
   }
