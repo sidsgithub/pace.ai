@@ -27,12 +27,11 @@ export default function Onboarding() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user)
-      setAuthLoading(false)
-    })
+    // onAuthStateChange fires immediately with the current session (or after
+    // processing the magic link hash), so we use it as the single source of truth.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
+      setAuthLoading(false)
     })
     return () => subscription.unsubscribe()
   }, [])
