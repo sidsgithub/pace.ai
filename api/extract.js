@@ -14,7 +14,8 @@ export default async function handler(req) {
     return new Response('Method not allowed', { status: 405 })
   }
 
-  const { messages } = await req.json()
+  const { messages, prompt: promptOverride } = await req.json()
+  const extractPrompt = promptOverride ?? EXTRACT_PROMPT
 
   // Drop leading assistant messages — Anthropic requires messages to start with 'user'
   const trimmed = messages[0]?.role === 'assistant' ? messages.slice(1) : messages
@@ -30,7 +31,7 @@ export default async function handler(req) {
       model: 'claude-sonnet-4-6',
       max_tokens: 500,
       temperature: 0,
-      messages: [...trimmed, { role: 'user', content: EXTRACT_PROMPT }],
+      messages: [...trimmed, { role: 'user', content: extractPrompt }],
     }),
   })
 

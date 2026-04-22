@@ -45,6 +45,8 @@ export default function Home() {
   const [planPending, setPlanPending] = useState(false)
   const [marking, setMarking] = useState(false)
   const [selectedIdx, setSelectedIdx] = useState(null)
+  const [adjustmentBanner, setAdjustmentBanner] = useState(null)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
   const navigate = useNavigate()
 
   const todayStr = useMemo(() => toLocalDateStr(new Date()), [])
@@ -75,8 +77,15 @@ export default function Home() {
       if (s.length === 0) {
         setPlanPending(true)
       } else {
-        const todayIdx = s.findIndex((x) => x.session_date === toLocalDateStr(todayDate))
-        setSelectedIdx(todayIdx >= 0 ? todayIdx : 0)
+        setSelectedIdx(0) // strip always starts from today, so today is index 0
+
+        const adjusted = s.find((x) => x.adjustment_reason && x.adjustment_reason.trim() !== '')
+        if (adjusted) {
+          const key = `banner_dismissed_${adjusted.id}`
+          if (!localStorage.getItem(key)) {
+            setAdjustmentBanner({ reason: adjusted.adjustment_reason, key })
+          }
+        }
       }
       setLoading(false)
     }
@@ -102,20 +111,36 @@ export default function Home() {
       if (data && data.length > 0) {
         setWeekSessions(data)
         setPlanPending(false)
-        const todayIdx = data.findIndex((x) => x.session_date === toLocalDateStr(new Date()))
-        setSelectedIdx(todayIdx >= 0 ? todayIdx : 0)
+        setSelectedIdx(0)
       }
     }, 5000)
     return () => clearInterval(interval)
   }, [planPending])
 
-  const todaySession = weekSessions.find((s) => s.session_date === todayStr) ?? null
+  // Deduplicate by session_date (keep most recently created), then filter today onwards, limit 7
+  const stripSessions = useMemo(() => {
+    const deduped = weekSessions.reduce((acc, session) => {
+      const existing = acc.find((s) => s.session_date === session.session_date)
+      if (!existing) {
+        acc.push(session)
+      } else if (session.created_at > existing.created_at) {
+        return acc.map((s) => (s.session_date === session.session_date ? session : s))
+      }
+      return acc
+    }, [])
+    return deduped
+      .filter((s) => s.session_date >= todayStr)
+      .sort((a, b) => a.session_date.localeCompare(b.session_date))
+      .slice(0, 7)
+  }, [weekSessions, todayStr])
+
+  const todaySession = stripSessions.find((s) => s.session_date === todayStr) ?? null
 
   const markDone = async () => {
     if (!todaySession || marking) return
     setMarking(true)
     await supabase.from('sessions').update({ status: 'done' }).eq('id', todaySession.id)
-    navigate(`/checkin/${todaySession.id}`)
+    navigate(`/checkin?session_id=${todaySession.id}`)
   }
 
   const markRestDone = async () => {
@@ -149,7 +174,7 @@ export default function Home() {
       <TodayCard
         loading={loading}
         planPending={planPending}
-        weekSessions={weekSessions}
+        weekSessions={stripSessions}
         todaySession={todaySession}
         marking={marking}
         onMarkDone={markDone}
@@ -157,12 +182,30 @@ export default function Home() {
         onStartRun={() => navigate(`/run/${todaySession?.id}`)}
       />
 
+      {/* Adjustment banner */}
+      {adjustmentBanner && !bannerDismissed && (
+        <div className="flex items-start gap-3 bg-gray-900 border-l-2 border-[#3b6d11] rounded-xl px-4 py-3">
+          <p className="flex-1 text-xs text-gray-300 leading-relaxed">
+            Coach Pace adjusted your plan — {adjustmentBanner.reason}
+          </p>
+          <button
+            onClick={() => {
+              localStorage.setItem(adjustmentBanner.key, '1')
+              setBannerDismissed(true)
+            }}
+            className="text-gray-500 hover:text-gray-300 text-sm leading-none mt-0.5 shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Plan strip */}
-      {!loading && weekSessions.length > 0 && (
+      {!loading && stripSessions.length > 0 && (
         <div className="flex flex-col gap-3">
           <p className="text-xs text-gray-400 uppercase tracking-wider">Your plan</p>
           <div className="flex gap-1.5">
-            {weekSessions.map((session, i) => {
+            {stripSessions.map((session, i) => {
               const isToday = session.session_date === todayStr
               const isDone = session.status === 'done'
               const isSelected = selectedIdx === i
@@ -193,8 +236,8 @@ export default function Home() {
           </div>
 
           {/* Expanded session detail */}
-          {selectedIdx !== null && weekSessions[selectedIdx] && (
-            <SessionDetail session={weekSessions[selectedIdx]} />
+          {selectedIdx !== null && stripSessions[selectedIdx] && (
+            <SessionDetail session={stripSessions[selectedIdx]} />
           )}
         </div>
       )}

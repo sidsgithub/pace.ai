@@ -10,7 +10,7 @@ export default function App() {
         <Route path="/" element={<Navigate to="/onboarding" replace />} />
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/home" element={<Home />} />
-        <Route path="/checkin/:id" element={<Checkin />} />
+        <Route path="/checkin" element={<Checkin />} />
       </Routes>
     </BrowserRouter>
   )

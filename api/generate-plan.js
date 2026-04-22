@@ -2,14 +2,17 @@ import { createClient } from '@supabase/supabase-js'
 
 export const config = { runtime: 'edge' }
 
-function buildPrompt(profile) {
-  const today = new Date()
-  const todayStr = today.toISOString().split('T')[0]
+function buildPrompt(profile, adjustmentReason) {
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+
+  const adjustmentNote = adjustmentReason
+    ? `\nRecent check-in note: ${adjustmentReason}\nFactor this into the next 7 days — adjust intensity, distance or session type where appropriate.\n`
+    : ''
 
   return `You are generating a 7-day running plan for the following user.
 Return ONLY a JSON array, no other text, no markdown.
 Today's date is ${todayStr} (use this as day 1 — do not guess dates).
-
+${adjustmentNote}
 User profile:
 - Name: ${profile.name ?? 'Unknown'}
 - Fitness level: ${profile.fitness_level ?? 'beginner'}
@@ -46,28 +49,30 @@ export default async function handler(req) {
     return new Response('Method not allowed', { status: 405 })
   }
 
-  const { profile, userId } = await req.json()
+  const { profile, userId, adjustmentReason = null, force = false } = await req.json()
 
   const adminSupabase = createClient(
     process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
   )
 
-  // Skip generation if a future planned session already exists
-  const today = new Date().toISOString().split('T')[0]
-  const { data: existing } = await adminSupabase
-    .from('sessions')
-    .select('id')
-    .eq('user_id', userId)
-    .eq('status', 'planned')
-    .gte('session_date', today)
-    .limit(1)
+  // Skip generation if a future planned session already exists (unless forced)
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+  if (!force) {
+    const { data: existing } = await adminSupabase
+      .from('sessions')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('status', 'planned')
+      .gte('session_date', today)
+      .limit(1)
 
-  if (existing && existing.length > 0) {
-    return new Response(
-      JSON.stringify({ success: true, skipped: true, reason: 'plan already exists' }),
-      { headers: { 'Content-Type': 'application/json' } },
-    )
+    if (existing && existing.length > 0) {
+      return new Response(
+        JSON.stringify({ success: true, skipped: true, reason: 'plan already exists' }),
+        { headers: { 'Content-Type': 'application/json' } },
+      )
+    }
   }
 
   const upstream = await fetch('https://api.anthropic.com/v1/messages', {
@@ -81,7 +86,7 @@ export default async function handler(req) {
       model: 'claude-sonnet-4-6',
       max_tokens: 2000,
       temperature: 0.7,
-      messages: [{ role: 'user', content: buildPrompt(profile) }],
+      messages: [{ role: 'user', content: buildPrompt(profile, adjustmentReason) }],
     }),
   })
 
@@ -99,16 +104,13 @@ export default async function handler(req) {
     })
   }
 
-  await adminSupabase
-    .from('sessions')
-    .delete()
-    .eq('user_id', userId)
-    .eq('status', 'planned')
-    .gte('session_date', today)
-
   const rows = sessions.map((s) => ({ ...s, user_id: userId, status: 'planned' }))
 
-  const { error } = await adminSupabase.from('sessions').insert(rows)
+  const { error, data: upserted } = await adminSupabase
+    .from('sessions')
+    .upsert(rows, { onConflict: 'user_id,session_date', ignoreDuplicates: false })
+    .select()
+
   if (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
@@ -116,7 +118,19 @@ export default async function handler(req) {
     })
   }
 
-  return new Response(JSON.stringify(rows), {
+  // Write adjustment_reason to the first non-rest session in the new plan
+  if (adjustmentReason && upserted) {
+    const firstActive = upserted.find((s) => s.session_type !== 'rest')
+    if (firstActive) {
+      await adminSupabase
+        .from('sessions')
+        .update({ adjustment_reason: adjustmentReason })
+        .eq('id', firstActive.id)
+
+    }
+  }
+
+  return new Response(JSON.stringify(upserted ?? rows), {
     headers: { 'Content-Type': 'application/json' },
   })
 }

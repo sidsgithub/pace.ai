@@ -5,8 +5,8 @@ export default async function handler(req) {
     return new Response('Method not allowed', { status: 405 })
   }
 
-  const { messages } = await req.json()
-  const systemPrompt = process.env.VITE_COACH_PACE_SYSTEM_PROMPT || ''
+  const { messages, system: systemOverride, max_tokens: maxTokensOverride } = await req.json()
+  const systemPrompt = systemOverride ?? process.env.VITE_COACH_PACE_SYSTEM_PROMPT ?? ''
 
   // Drop leading assistant messages — Anthropic requires messages to start with 'user'
   const trimmed = messages[0]?.role === 'assistant' ? messages.slice(1) : messages
@@ -20,7 +20,7 @@ export default async function handler(req) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 1000,
+      max_tokens: maxTokensOverride ?? 1000,
       temperature: 0.7,
       system: systemPrompt,
       messages: trimmed,

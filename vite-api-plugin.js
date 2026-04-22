@@ -1,13 +1,17 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
 
-function buildPlanPrompt(profile) {
-  const todayStr = new Date().toISOString().split('T')[0]
+function buildPlanPrompt(profile, adjustmentReason) {
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+
+  const adjustmentNote = adjustmentReason
+    ? `\nRecent check-in note: ${adjustmentReason}\nFactor this into the next 7 days — adjust intensity, distance or session type where appropriate.\n`
+    : ''
 
   return `You are generating a 7-day running plan for the following user.
 Return ONLY a JSON array, no other text, no markdown.
 Today's date is ${todayStr} (use this as day 1 — do not guess dates).
-
+${adjustmentNote}
 User profile:
 - Name: ${profile.name ?? 'Unknown'}
 - Fitness level: ${profile.fitness_level ?? 'beginner'}
@@ -70,7 +74,7 @@ export function apiPlugin() {
       server.middlewares.use('/api/chat', async (req, res, next) => {
         if (req.method !== 'POST') return next()
         try {
-          const { messages } = await readBody(req)
+          const { messages, system: systemOverride, max_tokens: maxTokensOverride } = await readBody(req)
           const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
           res.setHeader('Content-Type', 'text/event-stream')
@@ -80,9 +84,9 @@ export function apiPlugin() {
           const trimmed = messages[0]?.role === 'assistant' ? messages.slice(1) : messages
           const stream = client.messages.stream({
             model: 'claude-sonnet-4-6',
-            max_tokens: 1000,
+            max_tokens: maxTokensOverride ?? 1000,
             temperature: 0.7,
-            system: process.env.VITE_COACH_PACE_SYSTEM_PROMPT || '',
+            system: systemOverride ?? process.env.VITE_COACH_PACE_SYSTEM_PROMPT ?? '',
             messages: trimmed,
           })
 
@@ -100,26 +104,28 @@ export function apiPlugin() {
       server.middlewares.use('/api/generate-plan', async (req, res, next) => {
         if (req.method !== 'POST') return next()
         try {
-          const { profile, userId } = await readBody(req)
+          const { profile, userId, adjustmentReason = null, force = false } = await readBody(req)
           const adminSupabase = createClient(
             process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL,
             process.env.SUPABASE_SERVICE_ROLE_KEY,
           )
 
-          // Skip generation if a future planned session already exists
-          const today = new Date().toISOString().split('T')[0]
-          const { data: existing } = await adminSupabase
-            .from('sessions')
-            .select('id')
-            .eq('user_id', userId)
-            .eq('status', 'planned')
-            .gte('session_date', today)
-            .limit(1)
+          // Skip generation if a future planned session already exists (unless forced)
+          const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+          if (!force) {
+            const { data: existing } = await adminSupabase
+              .from('sessions')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('status', 'planned')
+              .gte('session_date', today)
+              .limit(1)
 
-          if (existing && existing.length > 0) {
-            res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({ success: true, skipped: true, reason: 'plan already exists' }))
-            return
+            if (existing && existing.length > 0) {
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ success: true, skipped: true, reason: 'plan already exists' }))
+              return
+            }
           }
 
           const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -128,7 +134,7 @@ export function apiPlugin() {
             model: 'claude-sonnet-4-6',
             max_tokens: 2000,
             temperature: 0.7,
-            messages: [{ role: 'user', content: buildPlanPrompt(profile) }],
+            messages: [{ role: 'user', content: buildPlanPrompt(profile, adjustmentReason) }],
           })
 
           const text = stripFences(response.content?.[0]?.text ?? '[]')
@@ -139,19 +145,27 @@ export function apiPlugin() {
             return
           }
 
-          await adminSupabase
-            .from('sessions')
-            .delete()
-            .eq('user_id', userId)
-            .eq('status', 'planned')
-            .gte('session_date', today)
-
           const rows = sessions.map((s) => ({ ...s, user_id: userId, status: 'planned' }))
-          const { error } = await adminSupabase.from('sessions').insert(rows)
+          const { error, data: upserted } = await adminSupabase
+            .from('sessions')
+            .upsert(rows, { onConflict: 'user_id,session_date', ignoreDuplicates: false })
+            .select()
           if (error) throw error
 
+          // Write adjustment_reason to first non-rest session
+          if (adjustmentReason && upserted) {
+            const firstActive = upserted.find((s) => s.session_type !== 'rest')
+            if (firstActive) {
+              await adminSupabase
+                .from('sessions')
+                .update({ adjustment_reason: adjustmentReason })
+                .eq('id', firstActive.id)
+
+            }
+          }
+
           res.setHeader('Content-Type', 'application/json')
-          res.end(JSON.stringify(rows))
+          res.end(JSON.stringify(upserted ?? rows))
         } catch (err) {
           res.statusCode = 500
           res.end(JSON.stringify({ error: err.message }))
@@ -161,7 +175,8 @@ export function apiPlugin() {
       server.middlewares.use('/api/extract', async (req, res, next) => {
         if (req.method !== 'POST') return next()
         try {
-          const { messages } = await readBody(req)
+          const { messages, prompt: promptOverride } = await readBody(req)
+          const extractPrompt = promptOverride ?? EXTRACT_PROMPT
           const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
           const trimmed = messages[0]?.role === 'assistant' ? messages.slice(1) : messages
@@ -169,7 +184,7 @@ export function apiPlugin() {
             model: 'claude-sonnet-4-6',
             max_tokens: 500,
             temperature: 0,
-            messages: [...trimmed, { role: 'user', content: EXTRACT_PROMPT }],
+            messages: [...trimmed, { role: 'user', content: extractPrompt }],
           })
 
           const text = stripFences(response.content?.[0]?.text ?? '{}')
