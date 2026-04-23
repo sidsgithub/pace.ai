@@ -17,7 +17,7 @@ export default function Onboarding() {
   // Auth step: 'email' | 'otp'
   const [authStep, setAuthStep] = useState('email')
   const [email, setEmail] = useState('')
-  const [digits, setDigits] = useState(Array(6).fill(''))
+  const [digits, setDigits] = useState(Array(8).fill(''))
   const [otpError, setOtpError] = useState('')
   const [otpLoading, setOtpLoading] = useState(false)
   const [resendCountdown, setResendCountdown] = useState(0)
@@ -77,7 +77,7 @@ export default function Onboarding() {
 
   const resendCode = async () => {
     await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })
-    setDigits(Array(6).fill(''))
+    setDigits(Array(8).fill(''))
     setOtpError('')
     setResendCountdown(30)
     setTimeout(() => digitRefs.current[0]?.focus(), 50)
@@ -89,7 +89,7 @@ export default function Onboarding() {
     const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' })
     if (error) {
       setOtpError('Incorrect code — try again')
-      setDigits(Array(6).fill(''))
+      setDigits(Array(8).fill(''))
       setTimeout(() => digitRefs.current[0]?.focus(), 50)
     }
     setOtpLoading(false)
@@ -102,10 +102,10 @@ export default function Onboarding() {
     next[i] = char
     setDigits(next)
     setOtpError('')
-    if (char && i < 5) digitRefs.current[i + 1]?.focus()
-    if (char && i === 5) {
+    if (char && i < 7) digitRefs.current[i + 1]?.focus()
+    if (char && i === 7) {
       const token = next.join('')
-      if (token.length === 6) verifyCode(token)
+      if (token.length === 8) verifyCode(token)
     }
   }
 
@@ -116,11 +116,11 @@ export default function Onboarding() {
   }
 
   const handlePaste = (e) => {
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
-    if (pasted.length === 6) {
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 8)
+    if (pasted.length === 8) {
       e.preventDefault()
       setDigits(pasted.split(''))
-      digitRefs.current[5]?.focus()
+      digitRefs.current[7]?.focus()
       verifyCode(pasted)
     }
   }
@@ -247,7 +247,7 @@ export default function Onboarding() {
             <p className="text-sm text-gray-500 text-center">
               We sent a 6-digit code to{' '}
               <button
-                onClick={() => { setAuthStep('email'); setDigits(Array(6).fill('')); setOtpError('') }}
+                onClick={() => { setAuthStep('email'); setDigits(Array(8).fill('')); setOtpError('') }}
                 className="font-medium text-gray-800 underline underline-offset-2"
               >
                 {email}
