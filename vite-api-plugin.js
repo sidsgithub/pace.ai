@@ -40,7 +40,12 @@ Rules:
 - Advanced: can include intervals, tempo, and a long run
 - Never schedule hard sessions on consecutive days
 - Always include at least 2 rest days
-- If sport_affinity is set, reference it in one coach_message`
+- If sport_affinity is set, reference it in one coach_message
+
+INJURY RULES — these override everything else:
+- If health_notes contains any mention of pain, ache, soreness or injury: the day immediately after the reported run MUST be a rest day, no exceptions.
+- If pain is in the foot, knee or ankle: the following 2 days must be rest or strength only, no running.
+- Never schedule a run the day after pain was reported unless health_notes explicitly says the pain resolved.`
 }
 
 const EXTRACT_PROMPT =

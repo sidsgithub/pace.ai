@@ -185,50 +185,49 @@ export default function Checkin() {
       .catch(() => {})
   }
 
-  const goHome = async () => {
-    navigate('/home')
+  const goHome = () => {
+    // Navigate immediately — all saving happens in the background
+    navigate('/home?plan_updating=true')
 
-    try {
-      // Do a final extraction to capture any signals from the last message
-      const finalSignals = await extractCheckin(messages).catch(() => ({}))
-      const signals = { ...signalDraft, ...Object.fromEntries(
-        Object.entries(finalSignals).filter(([, v]) => v !== null && v !== undefined)
-      )}
+    ;(async () => {
+      try {
+        const finalSignals = await extractCheckin(messages).catch(() => ({}))
+        const signals = { ...signalDraft, ...Object.fromEntries(
+          Object.entries(finalSignals).filter(([, v]) => v !== null && v !== undefined)
+        )}
 
-      const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
-      const effort = EFFORT_MAP[signals.effort_feel] ?? null
+        const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user')
+        const effort = EFFORT_MAP[signals.effort_feel] ?? null
 
-      // Upsert run record — prevents duplicate if check-in fires twice
-      await supabase.from('runs').upsert({
-        user_id: user.id,
-        session_id: session.id,
-        run_date: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
-        distance_km: session.distance_km ?? null,
-        duration_min: session.duration_min ?? null,
-        effort: effort,
-        pain_flags: signals.pain_flags ?? null,
-        notes: lastUserMsg?.content ?? null,
-      }, { onConflict: 'user_id,session_id', ignoreDuplicates: false })
+        await supabase.from('runs').upsert({
+          user_id: user.id,
+          session_id: session.id,
+          run_date: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }),
+          distance_km: session.distance_km ?? null,
+          duration_min: session.duration_min ?? null,
+          effort: effort,
+          pain_flags: signals.pain_flags ?? null,
+          notes: lastUserMsg?.content ?? null,
+        }, { onConflict: 'user_id,session_id', ignoreDuplicates: false })
 
-      // Update health_notes if pain flagged
-      if (signals.pain_flags) {
-        await supabase
-          .from('users')
-          .update({ health_notes: signals.pain_flags, updated_at: new Date().toISOString() })
-          .eq('id', user.id)
+        if (signals.pain_flags) {
+          await supabase
+            .from('users')
+            .update({ health_notes: signals.pain_flags, updated_at: new Date().toISOString() })
+            .eq('id', user.id)
+        }
+
+        const { data: profile } = await supabase.from('users').select('*').eq('id', user.id).single()
+        if (profile) {
+          await generateAndSavePlan(profile, user.id, {
+            adjustmentReason: signals.adjustment_reason ?? null,
+            force: true,
+          })
+        }
+      } catch {
+        // Silent — user is already on /home
       }
-
-      // Regenerate plan with updated profile + adjustment reason, force bypass duplicate check
-      const { data: profile } = await supabase.from('users').select('*').eq('id', user.id).single()
-      if (profile) {
-        generateAndSavePlan(profile, user.id, {
-          adjustmentReason: signals.adjustment_reason ?? null,
-          force: true,
-        }).catch(() => {})
-      }
-    } catch {
-      // Save failure is silent — user is already on /home
-    }
+    })()
   }
 
   if (!session) return null

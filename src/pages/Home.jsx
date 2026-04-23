@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 const TYPE_ABBR = {
@@ -47,7 +47,9 @@ export default function Home() {
   const [selectedIdx, setSelectedIdx] = useState(null)
   const [adjustmentBanner, setAdjustmentBanner] = useState(null)
   const [bannerDismissed, setBannerDismissed] = useState(false)
+  const [planUpdating, setPlanUpdating] = useState(false)
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   const todayStr = useMemo(() => toLocalDateStr(new Date()), [])
 
@@ -77,7 +79,7 @@ export default function Home() {
       if (s.length === 0) {
         setPlanPending(true)
       } else {
-        setSelectedIdx(0) // strip always starts from today, so today is index 0
+        setSelectedIdx(0)
 
         const adjusted = s.find((x) => x.adjustment_reason && x.adjustment_reason.trim() !== '')
         if (adjusted) {
@@ -87,6 +89,12 @@ export default function Home() {
           }
         }
       }
+
+      if (searchParams.get('plan_updating') === 'true') {
+        setPlanUpdating(true)
+        navigate('/home', { replace: true })
+      }
+
       setLoading(false)
     }
 
@@ -116,6 +124,43 @@ export default function Home() {
     }, 5000)
     return () => clearInterval(interval)
   }, [planPending])
+
+  useEffect(() => {
+    if (!planUpdating) return
+    const cutoff = new Date(Date.now() - 60 * 1000).toISOString()
+    const interval = setInterval(async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const todayDate = new Date()
+      const endDate = new Date(todayDate)
+      endDate.setDate(todayDate.getDate() + 7)
+      const { data } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('session_date', toLocalDateStr(todayDate))
+        .lte('session_date', toLocalDateStr(endDate))
+        .order('session_date', { ascending: true })
+      if (!data) return
+      const updated = data.find(
+        (s) => (s.adjustment_reason && s.adjustment_reason.trim() !== '') || s.updated_at > cutoff
+      )
+      if (updated) {
+        setWeekSessions(data)
+        setSelectedIdx(0)
+        setPlanUpdating(false)
+        const adjusted = data.find((s) => s.adjustment_reason && s.adjustment_reason.trim() !== '')
+        if (adjusted) {
+          const key = `banner_dismissed_${adjusted.id}`
+          if (!localStorage.getItem(key)) {
+            setAdjustmentBanner({ reason: adjusted.adjustment_reason, key })
+            setBannerDismissed(false)
+          }
+        }
+      }
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [planUpdating])
 
   // Deduplicate by session_date (keep most recently created), then filter today onwards, limit 7
   const stripSessions = useMemo(() => {
@@ -197,6 +242,14 @@ export default function Home() {
           >
             ✕
           </button>
+        </div>
+      )}
+
+      {/* Plan updating banner */}
+      {planUpdating && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-50 animate-pulse">
+          <div className="w-2 h-2 rounded-full bg-[#3b6d11]/40 shrink-0" />
+          <p className="text-xs text-gray-400">Coach Pace is updating your plan…</p>
         </div>
       )}
 
