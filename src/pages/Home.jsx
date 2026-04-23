@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import InstallPrompt from '../components/InstallPrompt'
+import { requestNotificationPermission, subscribeToPush } from '../lib/notifications'
 
 const TYPE_ABBR = {
   easy: 'E',
@@ -48,6 +50,7 @@ export default function Home() {
   const [adjustmentBanner, setAdjustmentBanner] = useState(null)
   const [bannerDismissed, setBannerDismissed] = useState(false)
   const [planUpdating, setPlanUpdating] = useState(false)
+  const [hasRuns, setHasRuns] = useState(false)
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
@@ -62,7 +65,7 @@ export default function Home() {
       const endDate = new Date(todayDate)
       endDate.setDate(todayDate.getDate() + 7)
 
-      const [{ data: profileData }, { data: sessions }] = await Promise.all([
+      const [{ data: profileData }, { data: sessions }, { count: runsCount }] = await Promise.all([
         supabase.from('users').select('*').eq('id', user.id).single(),
         supabase
           .from('sessions')
@@ -71,9 +74,16 @@ export default function Home() {
           .gte('session_date', toLocalDateStr(todayDate))
           .lte('session_date', toLocalDateStr(endDate))
           .order('session_date', { ascending: true }),
+        supabase.from('runs').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       ])
 
       if (profileData) setProfile(profileData)
+      if (runsCount && runsCount > 0) {
+        setHasRuns(true)
+        requestNotificationPermission().then((granted) => {
+          if (granted) subscribeToPush().catch(() => {})
+        }).catch(() => {})
+      }
       const s = sessions ?? []
       setWeekSessions(s)
       if (s.length === 0) {
@@ -252,6 +262,9 @@ export default function Home() {
           <p className="text-xs text-gray-400">Coach Pace is updating your plan…</p>
         </div>
       )}
+
+      {/* Install prompt — shown after first completed session */}
+      {hasRuns && <InstallPrompt />}
 
       {/* Plan strip */}
       {!loading && stripSessions.length > 0 && (

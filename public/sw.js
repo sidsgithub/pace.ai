@@ -29,3 +29,26 @@ self.addEventListener('fetch', (e) => {
       .catch(() => caches.match(e.request))
   );
 });
+
+self.addEventListener('push', (e) => {
+  const data = e.data ? e.data.json() : { title: 'Coach Pace', body: 'Time to run!' };
+  e.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/icons/icon-192x192.png',
+      badge: '/icons/icon-72x72.png',
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes('/home') && 'focus' in client) return client.focus();
+      }
+      if (clients.openWindow) return clients.openWindow('/home');
+    })
+  );
+});
