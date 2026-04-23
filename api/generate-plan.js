@@ -2,28 +2,11 @@ import { createClient } from '@supabase/supabase-js'
 
 export const config = { runtime: 'edge' }
 
-function buildPrompt(profile, adjustmentReason) {
-  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+const STATIC_SYSTEM =
+  'You are generating a 7-day running plan for a user. ' +
+  'Return ONLY a JSON array, no other text, no markdown.'
 
-  const adjustmentNote = adjustmentReason
-    ? `\nRecent check-in note: ${adjustmentReason}\nFactor this into the next 7 days — adjust intensity, distance or session type where appropriate.\n`
-    : ''
-
-  return `You are generating a 7-day running plan for the following user.
-Return ONLY a JSON array, no other text, no markdown.
-Today's date is ${todayStr} (use this as day 1 — do not guess dates).
-${adjustmentNote}
-User profile:
-- Name: ${profile.name ?? 'Unknown'}
-- Fitness level: ${profile.fitness_level ?? 'beginner'}
-- Goal: ${profile.goal ?? 'general fitness'}
-- Available days per week: ${profile.days_per_week ?? 3}
-- City: ${profile.city ?? 'Unknown'}
-- Sport background: ${profile.sport_affinity ?? 'none'}
-- Health notes: ${profile.health_notes ?? 'none'}
-
-Return a JSON array of 7 objects, one per day starting from tomorrow.
-Each object:
+const STATIC_RULES = `Each object in the array must have exactly these fields:
 {
   "session_date": "YYYY-MM-DD",
   "session_type": "easy" | "tempo" | "intervals" | "long" | "rest" | "strength",
@@ -47,6 +30,25 @@ INJURY RULES — these override everything else:
 - If health_notes contains any mention of pain, ache, soreness or injury: the day immediately after the reported run MUST be a rest day, no exceptions.
 - If pain is in the foot, knee or ankle: the following 2 days must be rest or strength only, no running.
 - Never schedule a run the day after pain was reported unless health_notes explicitly says the pain resolved.`
+
+function buildDynamicBlock(profile, adjustmentReason) {
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+  const adjustmentNote = adjustmentReason
+    ? `\nRecent check-in note: ${adjustmentReason}\nFactor this into the next 7 days — adjust intensity, distance or session type where appropriate.\n`
+    : ''
+
+  return `Today's date is ${todayStr} (use this as day 1 — do not guess dates).
+${adjustmentNote}
+User profile:
+- Name: ${profile.name ?? 'Unknown'}
+- Fitness level: ${profile.fitness_level ?? 'beginner'}
+- Goal: ${profile.goal ?? 'general fitness'}
+- Available days per week: ${profile.days_per_week ?? 3}
+- City: ${profile.city ?? 'Unknown'}
+- Sport background: ${profile.sport_affinity ?? 'none'}
+- Health notes: ${profile.health_notes ?? 'none'}
+
+Return a JSON array of 7 objects, one per day starting from today.`
 }
 
 export default async function handler(req) {
@@ -86,16 +88,30 @@ export default async function handler(req) {
       'Content-Type': 'application/json',
       'x-api-key': process.env.ANTHROPIC_API_KEY,
       'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'prompt-caching-2024-07-31',
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 2000,
       temperature: 0.7,
-      messages: [{ role: 'user', content: buildPrompt(profile, adjustmentReason) }],
+      system: [{ type: 'text', text: STATIC_SYSTEM, cache_control: { type: 'ephemeral' } }],
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: STATIC_RULES, cache_control: { type: 'ephemeral' } },
+          { type: 'text', text: buildDynamicBlock(profile, adjustmentReason) },
+        ],
+      }],
     }),
   })
 
   const data = await upstream.json()
+  console.log('cache stats (generate-plan):', {
+    cache_creation_input_tokens: data.usage?.cache_creation_input_tokens,
+    cache_read_input_tokens: data.usage?.cache_read_input_tokens,
+    input_tokens: data.usage?.input_tokens,
+  })
+
   const raw = data.content?.[0]?.text ?? '[]'
   const text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
 
@@ -131,7 +147,6 @@ export default async function handler(req) {
         .from('sessions')
         .update({ adjustment_reason: adjustmentReason })
         .eq('id', firstActive.id)
-
     }
   }
 

@@ -26,16 +26,24 @@ export default async function handler(req) {
       'Content-Type': 'application/json',
       'x-api-key': process.env.ANTHROPIC_API_KEY,
       'anthropic-version': '2023-06-01',
+      'anthropic-beta': 'prompt-caching-2024-07-31',
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 500,
       temperature: 0,
-      messages: [...trimmed, { role: 'user', content: extractPrompt }],
+      system: [{ type: 'text', text: extractPrompt, cache_control: { type: 'ephemeral' } }],
+      messages: trimmed,
     }),
   })
 
   const data = await upstream.json()
+  console.log('cache stats (extract):', {
+    cache_creation_input_tokens: data.usage?.cache_creation_input_tokens,
+    cache_read_input_tokens: data.usage?.cache_read_input_tokens,
+    input_tokens: data.usage?.input_tokens,
+  })
+
   const raw = data.content?.[0]?.text ?? '{}'
   const text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
 
