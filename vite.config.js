@@ -18,5 +18,10 @@ export default defineConfig(({ mode }) => {
       babel({ presets: [reactCompilerPreset()] }),
       apiPlugin(),
     ],
+    test: {
+      environment: 'jsdom',
+      globals: true,
+      setupFiles: './src/tests/setup.js',
+    },
   }
 })

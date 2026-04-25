@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { streamChat, extractProfile } from '../lib/claude'
 import { generateAndSavePlan } from '../lib/generatePlan'
+import OTPInput from '../components/OTPInput'
 
 const INITIAL_MESSAGE = {
   role: 'assistant',
@@ -17,11 +18,9 @@ export default function Onboarding() {
   // Auth step: 'email' | 'otp'
   const [authStep, setAuthStep] = useState('email')
   const [email, setEmail] = useState('')
-  const [digits, setDigits] = useState(Array(8).fill(''))
   const [otpError, setOtpError] = useState('')
   const [otpLoading, setOtpLoading] = useState(false)
   const [resendCountdown, setResendCountdown] = useState(0)
-  const digitRefs = useRef([])
 
   const [messages, setMessages] = useState([INITIAL_MESSAGE])
   const [input, setInput] = useState('')
@@ -72,57 +71,21 @@ export default function Onboarding() {
     await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })
     setAuthStep('otp')
     setResendCountdown(30)
-    setTimeout(() => digitRefs.current[0]?.focus(), 100)
   }
 
   const resendCode = async () => {
     await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })
-    setDigits(Array(8).fill(''))
     setOtpError('')
     setResendCountdown(30)
-    setTimeout(() => digitRefs.current[0]?.focus(), 50)
   }
 
   const verifyCode = async (token) => {
     setOtpLoading(true)
     setOtpError('')
     const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' })
-    if (error) {
-      setOtpError('Incorrect code — try again')
-      setDigits(Array(8).fill(''))
-      setTimeout(() => digitRefs.current[0]?.focus(), 50)
-    }
+    if (error) setOtpError('Incorrect code — try again')
     setOtpLoading(false)
     // on success, onAuthStateChange handles navigation
-  }
-
-  const handleDigitChange = (i, value) => {
-    const char = value.replace(/\D/g, '').slice(-1)
-    const next = [...digits]
-    next[i] = char
-    setDigits(next)
-    setOtpError('')
-    if (char && i < 7) digitRefs.current[i + 1]?.focus()
-    if (char && i === 7) {
-      const token = next.join('')
-      if (token.length === 8) verifyCode(token)
-    }
-  }
-
-  const handleDigitKeyDown = (i, e) => {
-    if (e.key === 'Backspace' && !digits[i] && i > 0) {
-      digitRefs.current[i - 1]?.focus()
-    }
-  }
-
-  const handlePaste = (e) => {
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 8)
-    if (pasted.length === 8) {
-      e.preventDefault()
-      setDigits(pasted.split(''))
-      digitRefs.current[7]?.focus()
-      verifyCode(pasted)
-    }
   }
 
   const sendMessage = async () => {
@@ -247,36 +210,18 @@ export default function Onboarding() {
             <p className="text-sm text-gray-500 text-center">
               We sent a 6-digit code to{' '}
               <button
-                onClick={() => { setAuthStep('email'); setDigits(Array(8).fill('')); setOtpError('') }}
+                onClick={() => { setAuthStep('email'); setOtpError('') }}
                 className="font-medium text-gray-800 underline underline-offset-2"
               >
                 {email}
               </button>
             </p>
 
-            <div className="flex gap-3 justify-center" onPaste={handlePaste}>
-              {digits.map((d, i) => (
-                <input
-                  key={i}
-                  ref={(el) => (digitRefs.current[i] = el)}
-                  value={d}
-                  onChange={(e) => handleDigitChange(i, e.target.value)}
-                  onKeyDown={(e) => handleDigitKeyDown(i, e)}
-                  inputMode="numeric"
-                  maxLength={1}
-                  disabled={otpLoading}
-                  className="w-12 h-14 text-center text-2xl font-semibold text-gray-900 border-b-2 border-gray-300 focus:border-[#3b6d11] outline-none transition-colors bg-transparent disabled:opacity-40 caret-transparent"
-                />
-              ))}
-            </div>
-
-            {otpError && (
-              <p className="text-sm text-red-500 text-center -mt-2">{otpError}</p>
-            )}
-
-            {otpLoading && (
-              <p className="text-sm text-gray-400 -mt-2">Verifying…</p>
-            )}
+            <OTPInput
+              onComplete={verifyCode}
+              error={otpError}
+              loading={otpLoading}
+            />
 
             <button
               onClick={resendCode}
