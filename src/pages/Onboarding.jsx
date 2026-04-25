@@ -196,7 +196,7 @@ export default function Onboarding() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#3b6d11] transition-colors"
+              className="border border-gray-200 rounded-xl px-4 py-3 text-base outline-none focus:border-[#3b6d11] transition-colors"
             />
             <button
               type="submit"
@@ -277,7 +277,7 @@ export default function Onboarding() {
           onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
           placeholder="Message Coach Pace…"
           disabled={loading || closingSent}
-          className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-[#3b6d11] transition-colors disabled:opacity-50"
+          className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-base outline-none focus:border-[#3b6d11] transition-colors disabled:opacity-50"
         />
         <button
           onClick={sendMessage}
