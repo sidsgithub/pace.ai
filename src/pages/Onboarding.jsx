@@ -21,6 +21,9 @@ export default function Onboarding() {
   const [otpError, setOtpError] = useState('')
   const [otpLoading, setOtpLoading] = useState(false)
   const [resendCountdown, setResendCountdown] = useState(0)
+  const [sendingCode, setSendingCode] = useState(false)
+  const [sendCodeError, setSendCodeError] = useState('')
+  const [codeSent, setCodeSent] = useState(false)
 
   const [messages, setMessages] = useState([INITIAL_MESSAGE])
   const [input, setInput] = useState('')
@@ -68,9 +71,21 @@ export default function Onboarding() {
 
   const sendCode = async (e) => {
     e?.preventDefault()
-    await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })
-    setAuthStep('otp')
-    setResendCountdown(30)
+    setSendingCode(true)
+    setSendCodeError('')
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })
+    if (error) {
+      setSendCodeError('Couldn\'t send code — check your email and try again')
+      setSendingCode(false)
+      return
+    }
+    setCodeSent(true)
+    setTimeout(() => {
+      setCodeSent(false)
+      setSendingCode(false)
+      setAuthStep('otp')
+      setResendCountdown(30)
+    }, 1000)
   }
 
   const resendCode = async () => {
@@ -198,11 +213,24 @@ export default function Onboarding() {
               required
               className="border border-gray-200 rounded-xl px-4 py-3 text-base outline-none focus:border-[#3b6d11] transition-colors"
             />
+            {sendCodeError && (
+              <p className="text-sm text-red-500">{sendCodeError}</p>
+            )}
+            {codeSent && (
+              <p className="text-sm text-[#3b6d11]">Code sent to {email}</p>
+            )}
             <button
               type="submit"
-              className="bg-[#3b6d11] text-white rounded-xl py-3 text-sm font-medium"
+              disabled={sendingCode}
+              className="bg-[#3b6d11] text-white rounded-xl py-3 text-sm font-medium disabled:opacity-70 flex items-center justify-center gap-2"
             >
-              Send code
+              {sendingCode && !codeSent && (
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              )}
+              {sendingCode ? 'Sending…' : 'Send code'}
             </button>
           </form>
         ) : (
