@@ -40,7 +40,7 @@ export default async function handler(req) {
   const data = await upstream.json()
   if (!upstream.ok) {
     console.error('extract upstream error:', upstream.status, JSON.stringify(data))
-    return new Response(JSON.stringify({ _error: upstream.status, _detail: data }), { headers: { 'Content-Type': 'application/json' } })
+    return new Response('{}', { headers: { 'Content-Type': 'application/json' } })
   }
   console.log('cache stats (extract):', {
     cache_creation_input_tokens: data.usage?.cache_creation_input_tokens,
@@ -49,7 +49,6 @@ export default async function handler(req) {
   })
 
   const raw = data.content?.[0]?.text ?? '{}'
-  console.log('extract raw text from Claude:', raw)
   // Find the JSON object even if Claude wraps it in prose or code fences
   const jsonMatch = raw.match(/\{[\s\S]*\}/)
   const text = jsonMatch ? jsonMatch[0] : '{}'

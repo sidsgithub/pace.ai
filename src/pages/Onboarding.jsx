@@ -102,7 +102,6 @@ export default function Onboarding() {
     setMessages((prev) => [...prev, { role: 'assistant', content: '' }])
 
     const toSend = nextMessages
-    console.log('sending to API:', JSON.stringify(toSend))
 
     let fullText = ''
     try {
@@ -122,22 +121,19 @@ export default function Onboarding() {
     if (userTurns < 3) return
 
     const withAssistant = [...nextMessages, { role: 'assistant', content: fullText }]
-    console.log('calling extractProfile, userTurns:', userTurns)
     extractProfile(withAssistant)
       .then((extracted) => {
-        console.log('extractProfile result:', extracted)
         if (extracted && typeof extracted === 'object') {
           setProfileDraft((prev) => {
             const merged = { ...prev }
             for (const [k, v] of Object.entries(extracted)) {
               if (v !== null && v !== undefined) merged[k] = v
             }
-            console.log('profileDraft after merge:', merged)
             return merged
           })
         }
       })
-      .catch((err) => console.error('extractProfile error:', err))
+      .catch(() => {})
   }
 
   const userMessageCount = messages.filter((m) => m.role === 'user').length

@@ -46,6 +46,5 @@ export async function extractProfile(messages) {
     body: JSON.stringify({ messages }),
   })
   const text = await res.text()
-  console.log('extract raw response (status', res.status, '):', text)
   try { return JSON.parse(text) } catch { return {} }
 }
