@@ -5,7 +5,7 @@ export default function OTPInput({ onComplete, error, loading, email } = {}) {
   const [digits, setDigits] = useState(Array(6).fill(''))
   const refs = useRef([])
 
-  const [countdown, setCountdown] = useState(30)
+  const [countdown, setCountdown] = useState(60)
   const [resendSending, setResendSending] = useState(false)
   const [resendMessage, setResendMessage] = useState('')
   const [resendError, setResendError] = useState('')
@@ -70,7 +70,7 @@ export default function OTPInput({ onComplete, error, loading, email } = {}) {
     setResendMessage(`Code resent to ${email}`)
     setDigits(Array(6).fill(''))
     refs.current[0]?.focus()
-    setCountdown(30)
+    setCountdown(60)
     setResendSending(false)
     setTimeout(() => setResendMessage(''), 2000)
   }
