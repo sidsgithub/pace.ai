@@ -17,9 +17,8 @@ export default async function handler(req) {
   const { messages, prompt: promptOverride } = await req.json()
   const extractPrompt = promptOverride ?? EXTRACT_PROMPT
 
-  // Anthropic requires: start with user, end with user
-  const leading = messages[0]?.role === 'assistant' ? messages.slice(1) : messages
-  const trimmed = leading[leading.length - 1]?.role === 'assistant' ? leading.slice(0, -1) : leading
+  // Wrap the conversation as text in a single user message so Claude extracts rather than continues
+  const transcript = messages.map(m => `${m.role === 'assistant' ? 'coach' : 'user'}: ${m.content}`).join('\n\n')
 
   const upstream = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -34,7 +33,7 @@ export default async function handler(req) {
       max_tokens: 500,
       temperature: 0,
       system: [{ type: 'text', text: extractPrompt, cache_control: { type: 'ephemeral' } }],
-      messages: trimmed,
+      messages: [{ role: 'user', content: transcript }],
     }),
   })
 
