@@ -1,9 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
+import { supabase } from '../lib/supabase'
 
-export default function OTPInput({ onComplete, error, loading } = {}) {
+export default function OTPInput({ onComplete, error, loading, email } = {}) {
   const [digits, setDigits] = useState(Array(6).fill(''))
   const refs = useRef([])
 
+  const [countdown, setCountdown] = useState(30)
+  const [resendSending, setResendSending] = useState(false)
+  const [resendMessage, setResendMessage] = useState('')
+  const [resendError, setResendError] = useState('')
+
+  // Count down from 30 on mount
+  useEffect(() => {
+    if (countdown <= 0) return
+    const t = setTimeout(() => setCountdown((c) => c - 1), 1000)
+    return () => clearTimeout(t)
+  }, [countdown])
+
+  // Reset digits and focus first box when a verify error comes in
   useEffect(() => {
     if (error) {
       setDigits(Array(6).fill(''))
@@ -39,6 +53,28 @@ export default function OTPInput({ onComplete, error, loading } = {}) {
     }
   }
 
+  const handleResend = async () => {
+    if (!email || resendSending) return
+    setResendSending(true)
+    setResendMessage('')
+    setResendError('')
+    const { error: resendErr } = await supabase.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: true },
+    })
+    if (resendErr) {
+      setResendError('Couldn\'t resend — try again')
+      setResendSending(false)
+      return
+    }
+    setResendMessage(`Code resent to ${email}`)
+    setDigits(Array(6).fill(''))
+    refs.current[0]?.focus()
+    setCountdown(30)
+    setResendSending(false)
+    setTimeout(() => setResendMessage(''), 2000)
+  }
+
   return (
     <div className="flex flex-col items-center gap-4">
       <p className="text-xs text-gray-400">Enter the 6-digit code</p>
@@ -58,6 +94,15 @@ export default function OTPInput({ onComplete, error, loading } = {}) {
         ))}
       </div>
       {error && <p className="text-sm text-red-500">{error}</p>}
+      {resendError && <p className="text-sm text-red-500">{resendError}</p>}
+      {resendMessage && <p className="text-sm text-[#3b6d11]">{resendMessage}</p>}
+      <button
+        onClick={handleResend}
+        disabled={countdown > 0 || resendSending}
+        className="text-xs text-gray-400 disabled:opacity-50 transition-opacity"
+      >
+        {resendSending ? 'Sending…' : countdown > 0 ? `Resend code in ${countdown}s` : 'Resend code'}
+      </button>
     </div>
   )
 }

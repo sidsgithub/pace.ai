@@ -20,7 +20,6 @@ export default function Onboarding() {
   const [email, setEmail] = useState('')
   const [otpError, setOtpError] = useState('')
   const [otpLoading, setOtpLoading] = useState(false)
-  const [resendCountdown, setResendCountdown] = useState(0)
   const [sendingCode, setSendingCode] = useState(false)
   const [sendCodeError, setSendCodeError] = useState('')
   const [codeSent, setCodeSent] = useState(false)
@@ -62,13 +61,6 @@ export default function Onboarding() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
-  // Countdown timer for resend
-  useEffect(() => {
-    if (resendCountdown <= 0) return
-    const t = setTimeout(() => setResendCountdown((c) => c - 1), 1000)
-    return () => clearTimeout(t)
-  }, [resendCountdown])
-
   const sendCode = async (e) => {
     e?.preventDefault()
     setSendingCode(true)
@@ -84,14 +76,7 @@ export default function Onboarding() {
       setCodeSent(false)
       setSendingCode(false)
       setAuthStep('otp')
-      setResendCountdown(30)
     }, 1000)
-  }
-
-  const resendCode = async () => {
-    await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } })
-    setOtpError('')
-    setResendCountdown(30)
   }
 
   const verifyCode = async (token) => {
@@ -249,15 +234,8 @@ export default function Onboarding() {
               onComplete={verifyCode}
               error={otpError}
               loading={otpLoading}
+              email={email}
             />
-
-            <button
-              onClick={resendCode}
-              disabled={resendCountdown > 0}
-              className="text-xs text-gray-400 disabled:opacity-50 transition-opacity"
-            >
-              {resendCountdown > 0 ? `Resend code in ${resendCountdown}s` : 'Resend code'}
-            </button>
           </div>
         )}
       </div>
