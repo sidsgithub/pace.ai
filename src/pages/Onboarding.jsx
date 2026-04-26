@@ -24,7 +24,8 @@ export default function Onboarding() {
   const [sendCodeError, setSendCodeError] = useState('')
   const [codeSent, setCodeSent] = useState(false)
 
-  const [messages, setMessages] = useState([INITIAL_MESSAGE])
+  const [messages, setMessages] = useState([])
+  const hasInitialized = useRef(false)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -56,6 +57,12 @@ export default function Onboarding() {
     })
     return () => subscription.unsubscribe()
   }, [navigate])
+
+  useEffect(() => {
+    if (hasInitialized.current) return
+    hasInitialized.current = true
+    setMessages([INITIAL_MESSAGE])
+  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
