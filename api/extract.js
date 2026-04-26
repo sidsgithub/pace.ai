@@ -17,8 +17,9 @@ export default async function handler(req) {
   const { messages, prompt: promptOverride } = await req.json()
   const extractPrompt = promptOverride ?? EXTRACT_PROMPT
 
-  // Drop leading assistant messages — Anthropic requires messages to start with 'user'
-  const trimmed = messages[0]?.role === 'assistant' ? messages.slice(1) : messages
+  // Anthropic requires: start with user, end with user
+  const leading = messages[0]?.role === 'assistant' ? messages.slice(1) : messages
+  const trimmed = leading[leading.length - 1]?.role === 'assistant' ? leading.slice(0, -1) : leading
 
   const upstream = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
