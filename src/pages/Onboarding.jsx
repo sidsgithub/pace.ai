@@ -22,7 +22,6 @@ export default function Onboarding() {
   const [otpLoading, setOtpLoading] = useState(false)
   const [sendingCode, setSendingCode] = useState(false)
   const [sendCodeError, setSendCodeError] = useState('')
-  const [codeSent, setCodeSent] = useState(false)
 
   const [messages, setMessages] = useState([])
   const hasInitialized = useRef(false)
@@ -78,12 +77,8 @@ export default function Onboarding() {
       setSendingCode(false)
       return
     }
-    setCodeSent(true)
-    setTimeout(() => {
-      setCodeSent(false)
-      setSendingCode(false)
-      setAuthStep('otp')
-    }, 1000)
+    setSendingCode(false)
+    setAuthStep('otp')
   }
 
   const verifyCode = async (token) => {
@@ -208,15 +203,12 @@ export default function Onboarding() {
             {sendCodeError && (
               <p className="text-sm text-red-500">{sendCodeError}</p>
             )}
-            {codeSent && (
-              <p className="text-sm text-[#3b6d11]">Code sent to {email}</p>
-            )}
             <button
               type="submit"
               disabled={sendingCode}
               className="bg-[#3b6d11] text-white rounded-xl py-3 text-sm font-medium disabled:opacity-70 flex items-center justify-center gap-2"
             >
-              {sendingCode && !codeSent && (
+              {sendingCode && (
                 <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
