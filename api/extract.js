@@ -38,6 +38,10 @@ export default async function handler(req) {
   })
 
   const data = await upstream.json()
+  if (!upstream.ok) {
+    console.error('extract upstream error:', upstream.status, JSON.stringify(data))
+    return new Response('{}', { headers: { 'Content-Type': 'application/json' } })
+  }
   console.log('cache stats (extract):', {
     cache_creation_input_tokens: data.usage?.cache_creation_input_tokens,
     cache_read_input_tokens: data.usage?.cache_read_input_tokens,
