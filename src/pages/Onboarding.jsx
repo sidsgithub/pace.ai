@@ -45,7 +45,7 @@ export default function Onboarding() {
           .from('users')
           .select('onboarded')
           .eq('id', currentUser.id)
-          .single()
+          .maybeSingle()
         if (data?.onboarded) {
           navigate('/home')
           return
@@ -101,9 +101,12 @@ export default function Onboarding() {
 
     setMessages((prev) => [...prev, { role: 'assistant', content: '' }])
 
+    const toSend = nextMessages
+    console.log('sending to API:', JSON.stringify(toSend))
+
     let fullText = ''
     try {
-      await streamChat(nextMessages, (chunk) => {
+      await streamChat(toSend, (chunk) => {
         fullText += chunk
         setMessages((prev) => {
           const updated = [...prev]

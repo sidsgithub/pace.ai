@@ -24,7 +24,7 @@ export default async function handler(req) {
   const systemPrompt = systemOverride ?? process.env.VITE_COACH_PACE_SYSTEM_PROMPT ?? ''
 
   // Drop leading assistant messages — Anthropic requires messages to start with 'user'
-  const trimmed = messages[0]?.role === 'assistant' ? messages.slice(1) : messages
+  const trimmed = messages;
 
   const upstream = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
