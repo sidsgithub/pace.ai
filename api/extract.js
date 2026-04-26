@@ -50,7 +50,10 @@ export default async function handler(req) {
   })
 
   const raw = data.content?.[0]?.text ?? '{}'
-  const text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+  console.log('extract raw text from Claude:', raw)
+  // Find the JSON object even if Claude wraps it in prose or code fences
+  const jsonMatch = raw.match(/\{[\s\S]*\}/)
+  const text = jsonMatch ? jsonMatch[0] : '{}'
 
   try {
     const extracted = JSON.parse(text)
