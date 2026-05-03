@@ -265,6 +265,18 @@ export default function Home() {
       {/* Install prompt — shown after first completed session */}
       {hasRuns && <InstallPrompt />}
 
+      {/* Plan strip skeleton */}
+      {(loading || planPending) && (
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-gray-400 uppercase tracking-wider">Your plan</p>
+          <div className="flex gap-1.5">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} className="flex-1 h-14 bg-gray-100 rounded-xl animate-pulse" />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Plan strip */}
       {!loading && stripSessions.length > 0 && (
         <div className="flex flex-col gap-3">
@@ -350,24 +362,27 @@ const LOADING_MESSAGES = [
 
 function TodayCard({ loading, weekSessions, todaySession, marking, onMarkDone, onMarkRestDone, onStartRun }) {
   const [msgIdx, setMsgIdx] = useState(0)
+  const showingPlaceholder = loading || weekSessions.length === 0
 
   useEffect(() => {
-    if (weekSessions.length > 0) return
+    if (!showingPlaceholder) return
     const interval = setInterval(() => setMsgIdx((i) => (i + 1) % LOADING_MESSAGES.length), 2500)
     return () => clearInterval(interval)
-  }, [weekSessions.length])
+  }, [showingPlaceholder])
 
-  if (loading) {
-    return <div className="rounded-2xl bg-gray-50 h-36 animate-pulse" />
-  }
-
-  if (weekSessions.length === 0) {
+  if (loading || weekSessions.length === 0) {
     return (
-      <div className="rounded-2xl bg-gray-50 p-5 flex items-center gap-4">
-        <div className="w-2 h-2 rounded-full bg-[#3b6d11]/40 shrink-0" />
-        <p className="text-xs text-[#3b6d11] italic leading-relaxed">
-          {LOADING_MESSAGES[msgIdx]}
-        </p>
+      <div className="rounded-2xl border border-gray-200 p-5 flex flex-col gap-4">
+        <div className="flex flex-col gap-2.5">
+          <div className="h-4 bg-gray-200 rounded-full w-3/4 animate-pulse" />
+          <p className="text-xs text-[#3b6d11] italic leading-relaxed">
+            {LOADING_MESSAGES[msgIdx]}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <div className="flex-1 h-10 bg-gray-100 rounded-xl animate-pulse" />
+          <div className="flex-1 h-10 bg-gray-100 rounded-xl animate-pulse" />
+        </div>
       </div>
     )
   }
