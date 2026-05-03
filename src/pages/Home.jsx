@@ -228,7 +228,6 @@ export default function Home() {
       {/* Today's session hero card */}
       <TodayCard
         loading={loading}
-        planPending={planPending}
         weekSessions={stripSessions}
         todaySession={todaySession}
         marking={marking}
@@ -339,17 +338,35 @@ function SessionDetail({ session }) {
   )
 }
 
-function TodayCard({ loading, planPending, weekSessions, todaySession, marking, onMarkDone, onMarkRestDone, onStartRun }) {
+const LOADING_MESSAGES = [
+  "Mapping your plan...",
+  "Building your running muscles...",
+  "Lacing up your shoes...",
+  "Plotting the perfect route...",
+  "Warming up the engine...",
+  "Getting your weeks in order...",
+  "Almost ready to run...",
+]
+
+function TodayCard({ loading, weekSessions, todaySession, marking, onMarkDone, onMarkRestDone, onStartRun }) {
+  const [msgIdx, setMsgIdx] = useState(0)
+
+  useEffect(() => {
+    if (weekSessions.length > 0) return
+    const interval = setInterval(() => setMsgIdx((i) => (i + 1) % LOADING_MESSAGES.length), 2500)
+    return () => clearInterval(interval)
+  }, [weekSessions.length])
+
   if (loading) {
     return <div className="rounded-2xl bg-gray-50 h-36 animate-pulse" />
   }
 
   if (weekSessions.length === 0) {
     return (
-      <div className="rounded-2xl bg-gray-50 p-5 flex items-center gap-4 animate-pulse">
+      <div className="rounded-2xl bg-gray-50 p-5 flex items-center gap-4">
         <div className="w-2 h-2 rounded-full bg-[#3b6d11]/40 shrink-0" />
-        <p className="text-sm text-gray-400">
-          {planPending ? 'Building your plan…' : 'Your plan is being built — check back in a moment'}
+        <p className="text-xs text-[#3b6d11] italic leading-relaxed">
+          {LOADING_MESSAGES[msgIdx]}
         </p>
       </div>
     )

@@ -175,10 +175,9 @@ export default function Onboarding() {
       })
       if (!saveRes.ok) throw new Error('save-profile failed')
 
-      console.log('POST /api/generate-plan for user', user.id)
-      await generateAndSavePlan(effectiveProfile, user.id)
-
       navigate('/home')
+      console.log('POST /api/generate-plan for user', user.id)
+      generateAndSavePlan(effectiveProfile, user.id).catch(() => {})
     } catch {
       setSaving(false)
     }
