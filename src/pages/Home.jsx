@@ -271,7 +271,7 @@ export default function Home() {
           <p className="text-xs text-gray-400 uppercase tracking-wider">Your plan</p>
           <div className="flex gap-1.5">
             {Array.from({ length: 7 }).map((_, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-1 py-2 rounded-xl text-xs font-medium bg-gray-800 animate-pulse" />
+              <div key={i} className="flex-1 flex flex-col items-center gap-1 py-2 rounded-xl text-xs font-medium bg-gray-800 animate-pulse h-16" />
             ))}
           </div>
           <div className="rounded-2xl bg-gray-50 p-4 flex flex-col gap-2.5">
