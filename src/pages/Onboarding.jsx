@@ -144,12 +144,11 @@ export default function Onboarding() {
   }
 
   const profileReady =
-    userMessageCount >= 6 &&
     profileDraft.name &&
-    profileDraft.fitness_level &&
     profileDraft.goal &&
+    profileDraft.fitness_level &&
     profileDraft.days_per_week &&
-    (profileDraft.city || profileDraft.sport_affinity || profileDraft.health_notes)
+    profileDraft.city
 
   useEffect(() => {
     if (profileReady && !closingSent) {
@@ -168,15 +167,18 @@ export default function Onboarding() {
     if (!user) return
     setSaving(true)
     try {
-      const { error: profileError } = await supabase.from('users').upsert({
-        id: user.id,
-        ...effectiveProfile,
-        onboarded: true,
-        updated_at: new Date().toISOString(),
+      console.log('POST /api/save-profile', effectiveProfile)
+      const saveRes = await fetch('/api/save-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, profile: effectiveProfile }),
       })
-      if (profileError) throw profileError
+      if (!saveRes.ok) throw new Error('save-profile failed')
+
+      console.log('POST /api/generate-plan for user', user.id)
+      await generateAndSavePlan(effectiveProfile, user.id)
+
       navigate('/home')
-      generateAndSavePlan(effectiveProfile, user.id)
     } catch {
       setSaving(false)
     }
@@ -283,7 +285,7 @@ export default function Onboarding() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
           placeholder="Message Coach Pace…"
-          disabled={loading || closingSent}
+          disabled={closingSent}
           className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-base outline-none focus:border-[#3b6d11] transition-colors disabled:opacity-50"
         />
         <button
