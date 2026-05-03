@@ -271,12 +271,13 @@ export default function Home() {
           <p className="text-xs text-gray-400 uppercase tracking-wider">Your plan</p>
           <div className="flex gap-1.5">
             {Array.from({ length: 7 }).map((_, i) => (
-              <div key={i} className="flex-1 py-2 rounded-xl bg-gray-800 animate-pulse h-10" />
+              <div key={i} className="flex-1 flex flex-col items-center gap-1 py-2 rounded-xl text-xs font-medium bg-gray-800 animate-pulse" />
             ))}
           </div>
-          <div className="flex flex-col gap-2 mt-1">
+          <div className="rounded-2xl bg-gray-50 p-4 flex flex-col gap-2.5">
             <div className="h-4 bg-gray-800 rounded-full w-full animate-pulse" />
-            <div className="h-4 bg-gray-800 rounded-full w-4/5 animate-pulse" />
+            <div className="h-4 bg-gray-800 rounded-full w-3/4 animate-pulse" />
+            <div className="h-4 bg-gray-800 rounded-full w-1/2 animate-pulse" />
           </div>
         </div>
       )}
