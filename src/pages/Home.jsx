@@ -271,10 +271,10 @@ export default function Home() {
           <p className="text-xs text-gray-400 uppercase tracking-wider">Your plan</p>
           <div className="flex gap-1.5">
             {Array.from({ length: 7 }).map((_, i) => (
-              <div key={i} className="flex-1 h-10 rounded-xl bg-gray-800 animate-pulse" />
+              <div key={i} className="w-[52px] h-[72px] rounded-xl bg-gray-800 animate-pulse shrink-0" />
             ))}
           </div>
-          <div className="h-16 bg-gray-800 rounded-2xl animate-pulse mt-1" />
+          <div className="h-40 bg-gray-800 rounded-2xl animate-pulse mt-1" />
         </div>
       )}
 
