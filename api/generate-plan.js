@@ -11,7 +11,7 @@ const STATIC_RULES = `Each object in the array must have exactly these fields:
   "session_date": "YYYY-MM-DD",
   "session_type": "easy" | "tempo" | "intervals" | "long" | "rest" | "strength",
   "title": "short title e.g. Easy 3km",
-  "description": "2-3 sentences of specific instructions",
+  "description": "specific instructions, under 30 words",
   "coach_message": "one warm motivational line from Coach Pace",
   "distance_km": number or null,
   "duration_min": number or null
@@ -92,7 +92,7 @@ export default async function handler(req) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 2000,
+      max_tokens: 800,
       temperature: 0.7,
       system: [{ type: 'text', text: STATIC_SYSTEM, cache_control: { type: 'ephemeral' } }],
       messages: [{

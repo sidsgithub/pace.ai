@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import InstallPrompt from '../components/InstallPrompt'
 import { requestNotificationPermission, subscribeToPush } from '../lib/notifications'
+import { generateAndSavePlan } from '../lib/generatePlan'
 
 const TYPE_ABBR = {
   easy: 'E',
@@ -45,6 +46,8 @@ export default function Home() {
   const [weekSessions, setWeekSessions] = useState([])
   const [loading, setLoading] = useState(true)
   const [planPending, setPlanPending] = useState(false)
+  const [planError, setPlanError] = useState(null)
+  const [userId, setUserId] = useState(null)
   const [marking, setMarking] = useState(false)
   const [selectedIdx, setSelectedIdx] = useState(null)
   const [adjustmentBanner, setAdjustmentBanner] = useState(null)
@@ -60,6 +63,7 @@ export default function Home() {
     async function fetchData() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { navigate('/onboarding'); return }
+      setUserId(user.id)
 
       const todayDate = new Date()
       const endDate = new Date(todayDate)
@@ -112,7 +116,6 @@ export default function Home() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (weekSessions.length > 0) return
     const interval = setInterval(async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -131,9 +134,9 @@ export default function Home() {
         setPlanPending(false)
         setSelectedIdx(0)
       }
-    }, 3000)
+    }, 5000)
     return () => clearInterval(interval)
-  }, [weekSessions.length])
+  }, [])
 
   useEffect(() => {
     if (!planUpdating) return
@@ -191,6 +194,31 @@ export default function Home() {
 
   const todaySession = stripSessions.find((s) => s.session_date === todayStr) ?? null
 
+  const triggerPlan = async () => {
+    if (!profile || !userId) return
+    setPlanError(null)
+    try {
+      await generateAndSavePlan(profile, userId, { force: true })
+    } catch (err) {
+      const msg = err?.message ?? ''
+      const is504 = msg.includes('504')
+      const isOffline = !navigator.onLine || msg === 'Failed to fetch'
+      if (isOffline) {
+        setPlanError('offline')
+      } else if (is504) {
+        setTimeout(async () => {
+          try {
+            await generateAndSavePlan(profile, userId, { force: true })
+          } catch {
+            setPlanError('timeout')
+          }
+        }, 5000)
+      } else {
+        setPlanError('error')
+      }
+    }
+  }
+
   const markDone = async () => {
     if (!todaySession || marking) return
     setMarking(true)
@@ -231,6 +259,8 @@ export default function Home() {
         weekSessions={stripSessions}
         todaySession={todaySession}
         marking={marking}
+        planError={planError}
+        onRetry={triggerPlan}
         onMarkDone={markDone}
         onMarkRestDone={markRestDone}
         onStartRun={() => navigate(`/run/${todaySession?.id}`)}
@@ -365,7 +395,7 @@ const LOADING_MESSAGES = [
   "Almost ready to run...",
 ]
 
-function TodayCard({ loading, weekSessions, todaySession, marking, onMarkDone, onMarkRestDone, onStartRun }) {
+function TodayCard({ loading, weekSessions, todaySession, marking, planError, onRetry, onMarkDone, onMarkRestDone, onStartRun }) {
   const [msgIdx, setMsgIdx] = useState(0)
   const showingPlaceholder = loading || weekSessions.length === 0
 
@@ -376,18 +406,38 @@ function TodayCard({ loading, weekSessions, todaySession, marking, onMarkDone, o
   }, [showingPlaceholder])
 
   if (loading || weekSessions.length === 0) {
+    const errorMessages = {
+      offline: "No connection — check your network and tap to retry",
+      timeout: "This is taking longer than usual — still working on it",
+      error: "Something went wrong. Your info is saved — tap to retry",
+    }
+    const showRetry = planError === 'offline' || planError === 'error'
+
     return (
       <div className="rounded-2xl border border-gray-200 p-5 flex flex-col gap-4">
         <div className="flex flex-col gap-2.5">
-          <p className="text-xs text-[#3b6d11] italic leading-relaxed">
-            {LOADING_MESSAGES[msgIdx]}
-          </p>
-          <div className="h-3 bg-gray-800 rounded-full w-[90%] animate-pulse" />
+          {planError ? (
+            <p className="text-sm text-gray-600 leading-relaxed">{errorMessages[planError]}</p>
+          ) : (
+            <p className="text-xs text-[#3b6d11] italic leading-relaxed">
+              {LOADING_MESSAGES[msgIdx]}
+            </p>
+          )}
+          {!planError && <div className="h-3 bg-gray-800 rounded-full w-[90%] animate-pulse" />}
         </div>
-        <div className="flex gap-2">
-          <div className="flex-1 h-10 bg-gray-800 rounded-xl animate-pulse" />
-          <div className="flex-1 h-10 bg-gray-800 rounded-xl animate-pulse" />
-        </div>
+        {showRetry ? (
+          <button
+            onClick={onRetry}
+            className="self-start bg-[#3b6d11] text-white text-sm font-medium px-4 py-2 rounded-xl"
+          >
+            Retry
+          </button>
+        ) : (
+          <div className="flex gap-2">
+            <div className="flex-1 h-10 bg-gray-800 rounded-xl animate-pulse" />
+            <div className="flex-1 h-10 bg-gray-800 rounded-xl animate-pulse" />
+          </div>
+        )}
       </div>
     )
   }
