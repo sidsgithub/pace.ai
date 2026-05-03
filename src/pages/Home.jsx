@@ -271,7 +271,7 @@ export default function Home() {
           <p className="text-xs text-gray-400 uppercase tracking-wider">Your plan</p>
           <div className="flex gap-1.5">
             {Array.from({ length: 7 }).map((_, i) => (
-              <div key={i} className="w-14 h-16 rounded-xl bg-gray-800 animate-pulse shrink-0" />
+              <div key={i} className="flex-1 h-10 rounded-xl bg-gray-800 animate-pulse" />
             ))}
           </div>
           <div className="h-16 bg-gray-800 rounded-2xl animate-pulse mt-1" />
@@ -375,11 +375,10 @@ function TodayCard({ loading, weekSessions, todaySession, marking, onMarkDone, o
     return (
       <div className="rounded-2xl border border-gray-200 p-5 flex flex-col gap-4">
         <div className="flex flex-col gap-2.5">
-          <div className="h-4 bg-gray-800 rounded-full w-[60%] animate-pulse" />
-          <div className="h-3 bg-gray-800 rounded-full w-[90%] animate-pulse" />
-          <p className="text-xs text-[#3b6d11] italic leading-relaxed mt-0.5">
+          <p className="text-xs text-[#3b6d11] italic leading-relaxed">
             {LOADING_MESSAGES[msgIdx]}
           </p>
+          <div className="h-3 bg-gray-800 rounded-full w-[90%] animate-pulse" />
         </div>
         <div className="flex gap-2">
           <div className="flex-1 h-10 bg-gray-800 rounded-xl animate-pulse" />
