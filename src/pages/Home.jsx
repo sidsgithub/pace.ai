@@ -112,13 +112,13 @@ export default function Home() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!planPending) return
+    if (weekSessions.length > 0) return
     const interval = setInterval(async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       const todayDate = new Date()
       const endDate = new Date(todayDate)
-      endDate.setDate(todayDate.getDate() + 7)
+      endDate.setDate(todayDate.getDate() + 6)
       const { data } = await supabase
         .from('sessions')
         .select('*')
@@ -131,9 +131,9 @@ export default function Home() {
         setPlanPending(false)
         setSelectedIdx(0)
       }
-    }, 5000)
+    }, 3000)
     return () => clearInterval(interval)
-  }, [planPending])
+  }, [weekSessions.length])
 
   useEffect(() => {
     if (!planUpdating) return
